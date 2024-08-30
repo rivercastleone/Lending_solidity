@@ -23,7 +23,7 @@ contract DreamAcademyLending {
     mapping(address => Lending)  LendingBalance;
     mapping(address => Lending)  depositETH; // 담보로 맡긴 Ether
     uint256 day_rate = 1001000000000000000 ;
-    uint block_per_rate = 1000000138819500300 ;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.000000139% 
+    uint block_per_rate = 1000000139000000000 ;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.000000139% 
                                     
     constructor(IPriceOracle target_oracle, address usdcAddress) {
         oracle = target_oracle;
