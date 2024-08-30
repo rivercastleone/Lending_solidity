@@ -11,18 +11,18 @@ interface IPriceOracle {
 contract DreamAcademyLending {
     IPriceOracle public oracle;
     IERC20 public usdc;
-    uint total; 
-    
+    uint total;  // deposit 한 총량
+
     struct Lending {
         uint amount;
         uint bnum;
     }
-    
+    mapping(address=>uint) deptInterest;
     mapping(address => uint)  depositUSDC;
     mapping(address => Lending)  LendingBalance;
     mapping(address => Lending)  depositETH; // 담보로 맡긴 Ether
-    uint256 day_rate = 1.001 ether; // 이자율 0.1% (복리)
-    uint block_per_rate = 1.0000000139 ether;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.0000000139%
+    uint256 day_rate = 1.001 ether; // 이자율 0.1% (복리) 
+    uint block_per_rate = 1.0000000139 ether;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.0000000139% 
                                     
     constructor(IPriceOracle target_oracle, address usdcAddress) {
         oracle = target_oracle;
@@ -31,26 +31,19 @@ contract DreamAcademyLending {
    function calc(uint principal, uint periods,uint rate) internal returns (uint result) {
         uint p = principal;
         for (uint i = 0; i < periods; i++) {
-            p = (p * rate) / 1 ether;
+            p = p * rate / 1 ether;
         }
         result = p - principal;
     }
 
     function interest(address user) internal {
         uint gap = (block.number - LendingBalance[user].bnum)*12;  // 블록을 시간으로 초 단위로 변환
-        console.log("current gap time", gap);
+
         if(gap>0){
-            if(gap == 12){ // 12초 이자율 계산
                 uint calcInterest = calc(LendingBalance[user].amount, gap, block_per_rate);
-                LendingBalance[user].amount += calcInterest;
-                }
-            else {
-                uint calcInterest = calc(LendingBalance[user].amount, gap, day_rate);
-                LendingBalance[user].amount += calcInterest;
-            }
+                LendingBalance[user].amount+=calcInterest;
         }
     }
-
 
     function getOracle() internal view returns (uint etherPrice, uint usdcPrice) {  
         etherPrice = oracle.getPrice(address(0x0));
@@ -67,6 +60,7 @@ contract DreamAcademyLending {
             require(msg.value == amount, "Invalid ETH amount");
             depositETH[msg.sender].amount += msg.value; // Ether를 담보로 예치
             depositETH[msg.sender].bnum = block.number; 
+            total += amount;
         } else {
             require(amount > 0, "Invalid usdc amount");
             depositUSDC[msg.sender] += amount;
@@ -84,7 +78,7 @@ contract DreamAcademyLending {
 
         require(collateralusdc >= price, "Insufficient collateral");
         require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient amount");
-
+        console.log("lending",LendingBalance[msg.sender].amount);
         LendingBalance[msg.sender].bnum = block.number;
         LendingBalance[msg.sender].amount += amount;
         IERC20(token).transfer(msg.sender, amount);
@@ -93,7 +87,6 @@ contract DreamAcademyLending {
     function repay(address token, uint amount) public {
         interest(msg.sender);
         require(LendingBalance[msg.sender].amount >= amount, "Insufficient supply");
-
         LendingBalance[msg.sender].amount -= amount;
         IERC20(token).transferFrom(msg.sender, address(this), amount);
     }
@@ -104,13 +97,12 @@ contract DreamAcademyLending {
 
         if (token == address(0x0)) { 
             require(depositETH[msg.sender].amount >= amount, "Insufficient ETH");
-
-            uint collateral = (depositETH[msg.sender].amount - amount) * etherPrice / 1 ether;
+            uint collateral = depositETH[msg.sender].amount - amount;
             uint value = LendingBalance[msg.sender].amount * usdcPrice / etherPrice;
-
+            console.log("collateral : ",collateral*3);
+            console.log("value : ",value*4);
             // LTV 75% 이하 유지
-            require(collateral * 100 >= value * 75, "Insufficient collateral");
-
+            require(value * 4 <= collateral * 3, "Insufficient collateral");
             depositETH[msg.sender].amount -= amount;
             msg.sender.call{value: amount}("");
 
@@ -129,6 +121,7 @@ contract DreamAcademyLending {
         uint debt = LendingBalance[borrower].amount * usdcPrice / etherPrice;
         uint collateral = depositETH[borrower].amount;
         uint maxliquidate = LendingBalance[borrower].amount / 4;
+        
 
         require(debt > collateral * 3 / 4); 
         require(amount <= maxliquidate); //청산은 25% 까지만 가능
@@ -145,7 +138,9 @@ contract DreamAcademyLending {
             price = depositUSDC[msg.sender];
         }
     }
-
+    function getYield(address token, uint day, uint amount)internal{
+        
+    }
     receive() external payable {
         total += msg.value;
     }

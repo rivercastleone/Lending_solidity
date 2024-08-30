@@ -434,7 +434,7 @@ contract Testx is Test {
         usdc.transfer(user3, 30000000 ether);
         vm.startPrank(user3);
         usdc.approve(address(lending), type(uint256).max);
-        lending.deposit(address(usdc), 30000000 ether);
+        lending.deposit(address(usdc), 30000000 ether); // user3이 3000만 deposit
         vm.stopPrank();
 
         supplyUSDCDepositUser1();
@@ -452,7 +452,7 @@ contract Testx is Test {
             assertTrue(success);
 
             (success,) = address(lending).call(
-                abi.encodeWithSelector(DreamAcademyLending.borrow.selector, address(usdc), 1000 ether)
+                abi.encodeWithSelector(DreamAcademyLending.borrow.selector, address(usdc), 1000 ether) // user2가 2000 빌림
             );
             assertTrue(success);
 
@@ -463,11 +463,11 @@ contract Testx is Test {
         }
         vm.stopPrank();
 
-        vm.roll(block.number + (86400 * 1000 / 12));
+        vm.roll(block.number + (86400 * 1000 / 12)); // 1000일이 지났을 때 user3의 deposit에 대한 이자가 792
         vm.prank(user3);
         assertTrue(lending.getAccruedSupplyAmount(address(usdc)) / 1e18 == 30000792);
 
-        vm.roll(block.number + (86400 * 500 / 12));
+        vm.roll(block.number + (86400 * 500 / 12)); // 500일이 지났을 때 user3의 deposit에 대한 이자가 1605
         vm.prank(user3);
         assertTrue(lending.getAccruedSupplyAmount(address(usdc)) / 1e18 == 30001605);
 
