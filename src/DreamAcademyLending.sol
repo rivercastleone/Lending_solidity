@@ -23,7 +23,7 @@ contract DreamAcademyLending {
     mapping(address => Lending)  LendingBalance;
     mapping(address => Lending)  depositETH; // 담보로 맡긴 Ether
     uint256 day_rate = 1001000000000000000 ;
-    uint block_per_rate = 1000000138819500300 ;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.0000000139% 
+    uint block_per_rate = 1000000138819500300 ;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.000000139% 
                                     
     constructor(IPriceOracle target_oracle, address usdcAddress) {
         oracle = target_oracle;
@@ -42,21 +42,17 @@ contract DreamAcademyLending {
         uint day = gap / 7200;
         uint blocks = gap % 7200;
         console.log("gap",gap);
-        if(gap>0)
-        for(uint i=0; i<day; i++){
+        if(gap>0){
             uint calcInterest = calc(totaldept, day, day_rate);
             LendingBalance[user].amount+=calcInterest;
             distributeInterest(calcInterest);
         
-        }
-        for(uint i=0; i<blocks; i++){
-            uint calcInterest = calc(totaldept, blocks, block_per_rate);
-            LendingBalance[user].amount+=calcInterest;
-            distributeInterest(calcInterest);
-        }
+            uint calcInterest2 = calc(totaldept, blocks, block_per_rate);
+            LendingBalance[user].amount+=calcInterest2;
+            distributeInterest(calcInterest2);
             LendingBalance[user].bnum= block.number;
         }
-    
+    }
 
     function getOracle() internal view returns (uint etherPrice, uint usdcPrice) {  
         etherPrice = oracle.getPrice(address(0x0));
