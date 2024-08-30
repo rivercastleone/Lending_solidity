@@ -11,39 +11,52 @@ interface IPriceOracle {
 contract DreamAcademyLending {
     IPriceOracle public oracle;
     IERC20 public usdc;
-    uint total;  // deposit 한 총량
-
+    uint usdctotal;  // deposit 한 총량
+    address[] users;
     struct Lending {
         uint amount;
         uint bnum;
     }
-    mapping(address=>uint) deptInterest;
+    mapping(address => uint) deptInterest;
+    uint totaldept;
     mapping(address => uint)  depositUSDC;
     mapping(address => Lending)  LendingBalance;
     mapping(address => Lending)  depositETH; // 담보로 맡긴 Ether
-    uint256 day_rate = 1.001 ether; // 이자율 0.1% (복리) 
-    uint block_per_rate = 1.0000000139 ether;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.0000000139% 
+    uint256 day_rate = 1001000000000000000 ;
+    uint block_per_rate = 1000000138819500300 ;  // 하루 이자율이 0.1% 일때 한 블록당 이자율 0.0000000139% 
                                     
     constructor(IPriceOracle target_oracle, address usdcAddress) {
         oracle = target_oracle;
         usdc = IERC20(usdcAddress);
     }
-   function calc(uint principal, uint periods,uint rate) internal returns (uint result) {
-        uint p = principal;
-        for (uint i = 0; i < periods; i++) {
+   function calc(uint principal, uint gap,uint rate) internal returns (uint result) { // 이자율 계산
+        uint p = principal; 
+        for (uint i = 0; i < gap; i++) {
             p = p * rate / 1 ether;
         }
         result = p - principal;
     }
 
     function interest(address user) internal {
-        uint gap = (block.number - LendingBalance[user].bnum)*12;  // 블록을 시간으로 초 단위로 변환
-
-        if(gap>0){
-                uint calcInterest = calc(LendingBalance[user].amount, gap, block_per_rate);
-                LendingBalance[user].amount+=calcInterest;
+        uint gap = (block.number - LendingBalance[user].bnum);  // 블록을 시간으로 초 단위로 변환
+        uint day = gap / 7200;
+        uint blocks = gap % 7200;
+        console.log("gap",gap);
+        if(gap>0)
+        for(uint i=0; i<day; i++){
+            uint calcInterest = calc(totaldept, day, day_rate);
+            LendingBalance[user].amount+=calcInterest;
+            distributeInterest(calcInterest);
+        
         }
-    }
+        for(uint i=0; i<blocks; i++){
+            uint calcInterest = calc(totaldept, blocks, block_per_rate);
+            LendingBalance[user].amount+=calcInterest;
+            distributeInterest(calcInterest);
+        }
+            LendingBalance[user].bnum= block.number;
+        }
+    
 
     function getOracle() internal view returns (uint etherPrice, uint usdcPrice) {  
         etherPrice = oracle.getPrice(address(0x0));
@@ -60,11 +73,14 @@ contract DreamAcademyLending {
             require(msg.value == amount, "Invalid ETH amount");
             depositETH[msg.sender].amount += msg.value; // Ether를 담보로 예치
             depositETH[msg.sender].bnum = block.number; 
-            total += amount;
         } else {
             require(amount > 0, "Invalid usdc amount");
+            if(depositUSDC[msg.sender]==0){ //새로운 유저의 deposit
+                users.push(msg.sender);
+            }
             depositUSDC[msg.sender] += amount;
-            total += amount;
+            usdctotal += amount;
+            console.log("total", usdctotal);
             IERC20(token).transferFrom(msg.sender, address(this), amount);
         }
     }
@@ -78,9 +94,10 @@ contract DreamAcademyLending {
 
         require(collateralusdc >= price, "Insufficient collateral");
         require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient amount");
-        console.log("lending",LendingBalance[msg.sender].amount);
-        LendingBalance[msg.sender].bnum = block.number;
+        LendingBalance[msg.sender].bnum = block.number; 
         LendingBalance[msg.sender].amount += amount;
+        totaldept+=amount;
+        console.log("lending : ",LendingBalance[msg.sender].amount );
         IERC20(token).transfer(msg.sender, amount);
     }
 
@@ -88,6 +105,7 @@ contract DreamAcademyLending {
         interest(msg.sender);
         require(LendingBalance[msg.sender].amount >= amount, "Insufficient supply");
         LendingBalance[msg.sender].amount -= amount;
+        usdctotal-=amount;
         IERC20(token).transferFrom(msg.sender, address(this), amount);
     }
 
@@ -99,8 +117,7 @@ contract DreamAcademyLending {
             require(depositETH[msg.sender].amount >= amount, "Insufficient ETH");
             uint collateral = depositETH[msg.sender].amount - amount;
             uint value = LendingBalance[msg.sender].amount * usdcPrice / etherPrice;
-            console.log("collateral : ",collateral*3);
-            console.log("value : ",value*4);
+
             // LTV 75% 이하 유지
             require(value * 4 <= collateral * 3, "Insufficient collateral");
             depositETH[msg.sender].amount -= amount;
@@ -125,23 +142,32 @@ contract DreamAcademyLending {
 
         require(debt > collateral * 3 / 4); 
         require(amount <= maxliquidate); //청산은 25% 까지만 가능
-
+        usdctotal-=amount;
         depositETH[borrower].amount -= amount * usdcPrice / etherPrice;
         LendingBalance[borrower].amount -= amount;
         IERC20(token).transfer(msg.sender, amount);
     }
 
-    function getAccruedSupplyAmount(address token) public view returns (uint price) {
+    function getAccruedSupplyAmount(address token) public  returns (uint price) {
+        interest(msg.sender);
         if (token == address(0x0)) {
             price = depositETH[msg.sender].amount;
         } else {
-            price = depositUSDC[msg.sender];
+            price = depositUSDC[msg.sender] + deptInterest[msg.sender];
         }
     }
-    function getYield(address token, uint day, uint amount)internal{
-        
-    }
+
     receive() external payable {
-        total += msg.value;
+    }
+
+    function distributeInterest(uint totalInterest) internal {
+    // 예치된 USDC에 대한 이자를 분배
+    for (uint i=0; i<users.length; i++) {
+        address user = users[i];                
+        uint share = (depositUSDC[user] * totalInterest) / usdctotal;
+        deptInterest[user] += share;
+        }
     }
 }
+    
+
