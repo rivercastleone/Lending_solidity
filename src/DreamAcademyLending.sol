@@ -45,10 +45,12 @@ contract DreamAcademyLending {
         if(gap>0){
             uint calcInterest = calc(totaldept, day, day_rate);
             LendingBalance[user].amount+=calcInterest;
+            totaldept+=calcInterest;
             distributeInterest(calcInterest);
         
             uint calcInterest2 = calc(totaldept, blocks, block_per_rate);
             LendingBalance[user].amount+=calcInterest2;
+            totaldept+=calcInterest2;
             distributeInterest(calcInterest2);
             LendingBalance[user].bnum= block.number;
         }
@@ -120,8 +122,10 @@ contract DreamAcademyLending {
             msg.sender.call{value: amount}("");
 
         } else { 
+            depositUSDC[msg.sender] +=deptInterest[msg.sender];
+            deptInterest[msg.sender]=0;
             require(depositUSDC[msg.sender] >= amount, "Insufficient usdc");
-            // 덜 구현함...
+            
             depositUSDC[msg.sender] -= amount;
             IERC20(token).transfer(msg.sender, amount);
         }
