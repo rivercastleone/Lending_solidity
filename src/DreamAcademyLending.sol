@@ -110,7 +110,7 @@ contract DreamAcademyLending {
     function withdraw(address token, uint amount) public {
         interest(msg.sender);
         (uint etherPrice, uint usdcPrice) = getOracle();
-
+        require(token == address(0x0) || token == address(usdc));
         if (token == address(0x0)) { 
             require(depositETH[msg.sender].amount >= amount, "Insufficient ETH");
             uint collateral = depositETH[msg.sender].amount - amount;
@@ -121,8 +121,9 @@ contract DreamAcademyLending {
             depositETH[msg.sender].amount -= amount;
             msg.sender.call{value: amount}("");
 
-        } else { 
-            depositUSDC[msg.sender] +=deptInterest[msg.sender];
+        } 
+        else {
+            depositUSDC[msg.sender]+=deptInterest[msg.sender];
             deptInterest[msg.sender]=0;
             require(depositUSDC[msg.sender] >= amount, "Insufficient usdc");
             
@@ -150,11 +151,9 @@ contract DreamAcademyLending {
 
     function getAccruedSupplyAmount(address token) public  returns (uint price) {
         interest(msg.sender);
-        if (token == address(0x0)) {
-            price = depositETH[msg.sender].amount;
-        } else {
-            price = depositUSDC[msg.sender] + deptInterest[msg.sender];
-        }
+        require(token == address(usdc));
+        price = depositUSDC[msg.sender] + deptInterest[msg.sender];
+
     }
 
     receive() external payable {
